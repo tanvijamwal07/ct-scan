@@ -1,0 +1,41 @@
+from __future__ import annotations
+
+import torch
+from torch import nn
+from torchvision import models
+
+
+def _replace_classifier(model: nn.Module, num_classes: int, dropout: float = 0.5) -> nn.Module:
+    in_features = model.classifier[-1].in_features
+    model.classifier[-1] = nn.Sequential(
+        nn.Linear(in_features, 512),
+        nn.ReLU(),
+        nn.Dropout(dropout),
+        nn.Linear(512, num_classes),
+    )
+    return model
+
+
+def create_convnext_tiny(num_classes: int, pretrained: bool = True, dropout: float = 0.5) -> nn.Module:
+    weights = None
+    if pretrained:
+        try:
+            weights = models.ConvNeXt_Tiny_Weights.DEFAULT
+        except AttributeError:
+            weights = None
+    try:
+        model = models.convnext_tiny(weights=weights)
+    except Exception:
+        model = models.convnext_tiny(weights=None)
+    return _replace_classifier(model, num_classes=num_classes, dropout=dropout)
+
+
+def load_checkpoint(path: str, model: nn.Module, optimizer=None, scheduler=None, map_location="cpu") -> dict:
+    checkpoint = torch.load(path, map_location=map_location)
+    state_dict = checkpoint.get("model_state_dict", checkpoint)
+    model.load_state_dict(state_dict)
+    if optimizer is not None and "optimizer_state_dict" in checkpoint:
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    if scheduler is not None and "scheduler_state_dict" in checkpoint:
+        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+    return checkpoint
